@@ -1,0 +1,42 @@
+[package]
+name = "webhook-mocker"
+version = "0.1.0"
+edition = "2024"
+description = "Dev-only Slack/Teams webhook mocker with a live virtual-channel UI"
+license = "MIT"
+repository = "https://github.com/davidgroves/webhook-mocker"
+
+[dependencies]
+askama = "0.14"
+axum = { version = "0.8", features = ["macros"] }
+bytes = "1"
+clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3"
+hex = "0.4"
+parking_lot = "0.12"
+pulldown-cmark = "0.13"
+rand = "0.9"
+rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
+utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,18 @@
+{
+  "text": "Fallback text for notifications",
+  "blocks": [
+    {
+      "type": "header",
+      "text": { "type": "plain_text", "text": "Deploy complete" }
+    },
+    {
+      "type": "section",
+      "text": { "type": "mrkdwn", "text": "Service *api* rolled out to *prod*." }
+    },
+    { "type": "divider" },
+    {
+      "type": "context",
+      "elements": [{ "type": "mrkdwn", "text": "by deploy-bot" }]
+    }
+  ]
+}

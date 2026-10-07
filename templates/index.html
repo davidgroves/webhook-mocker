@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>webhook-mocker</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <div class="dev-banner">DEV ONLY — captures secrets unredacted. Do not expose publicly.</div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-name">webhook-mocker</div>
+        <div class="brand-sub">{{ public_base }}</div>
+      </div>
+      <button type="button" class="btn primary" id="new-webhook">New webhook</button>
+      <nav class="channel-list" id="channel-list">
+        {% for ch in channels %}
+        <a class="channel-item {% if ch.active %}active{% endif %}" href="/ui/channel/{{ ch.id }}" data-id="{{ ch.id }}">
+          <span class="kind-badge kind-{{ ch.kind }}">{{ ch.kind_label }}</span>
+          <span class="channel-name">{{ ch.name }}{% if ch.archived %} <em>(archived)</em>{% endif %}</span>
+          {% if ch.unread > 0 %}<span class="unread">{{ ch.unread }}</span>{% endif %}
+        </a>
+        {% endfor %}
+        {% if channels.is_empty() %}
+        <p class="empty">No channels yet. Create one or POST to a webhook URL.</p>
+        {% endif %}
+      </nav>
+    </aside>
+
+    <main class="feed">
+      {% match selected %}
+      {% when Some with (sel) %}
+      <header class="feed-header">
+        <div>
+          <h1>{{ sel.name }}</h1>
+          <code class="webhook-url" id="webhook-url">{{ sel.webhook_url }}</code>
+          <button type="button" class="btn ghost" data-copy="#webhook-url">Copy URL</button>
+        </div>
+        <div class="feed-actions">
+          <button type="button" class="btn" id="toggle-faults" data-channel="{{ sel.id }}">Faults</button>
+          <button type="button" class="btn" id="clear-messages" data-channel="{{ sel.id }}">Clear</button>
+          <button type="button" class="btn danger" id="delete-channel" data-channel="{{ sel.id }}">Delete</button>
+        </div>
+      </header>
+      <div class="message-list" id="message-list" data-channel="{{ sel.id }}">
+        {% for m in messages %}
+        <a class="message-row {% if m.active %}active{% endif %}" href="/ui/channel/{{ sel.id }}/message/{{ m.id }}">
+          <span class="status s{{ m.status }}">{{ m.status }}</span>
+          <span class="summary">{{ m.summary }}</span>
+          <span class="meta">{{ m.received_at }}{% if m.warning_count > 0 %} · {{ m.warning_count }} warn{% endif %}</span>
+        </a>
+        {% endfor %}
+        {% if messages.is_empty() %}
+        <p class="empty">Waiting for webhooks…</p>
+        {% endif %}
+      </div>
+      {% when None %}
+      <div class="empty-state">
+        <h1>Virtual channels</h1>
+        <p>Create a webhook or point your app at a Slack/Teams URL on this host.</p>
+      </div>
+      {% endmatch %}
+    </main>
+
+    <aside class="debug">
+      {% match selected_message %}
+      {% when Some with (msg) %}
+      <div class="debug-panel {{ msg.kind_class }}">
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" data-tab="rendered">Rendered</button>
+          <button type="button" class="tab" data-tab="request">Request</button>
+          <button type="button" class="tab" data-tab="body">Body</button>
+          <button type="button" class="tab" data-tab="response">Response</button>
+          <button type="button" class="tab" data-tab="warnings">Warnings</button>
+        </div>
+        <div class="tab-pane active" id="tab-rendered">
+          <div class="msg-card">
+            <div class="msg-author">{{ msg.username }}</div>
+            <div class="msg-body">{{ msg.blocks_html|safe }}</div>
+          </div>
+        </div>
+        <div class="tab-pane" id="tab-request">
+          <dl class="kv">
+            <dt>Time</dt><dd>{{ msg.received_at }}</dd>
+            <dt>Remote</dt><dd>{{ msg.remote_addr }}</dd>
+            <dt>Request</dt><dd><code>{{ msg.method }} {{ msg.path }}{% if !msg.query.is_empty() %}?{{ msg.query }}{% endif %}</code></dd>
+          </dl>
+          <h3>Headers</h3>
+          <pre>{% for (k, v) in msg.headers %}{{ k }}: {{ v }}
+{% endfor %}</pre>
+          <button type="button" class="btn" data-copy="#curl-box">Copy as curl</button>
+          <pre id="curl-box">{{ msg.curl }}</pre>
+        </div>
+        <div class="tab-pane" id="tab-body">
+          {% if !msg.body_json_pretty.is_empty() %}
+          <h3>JSON</h3>
+          <pre>{{ msg.body_json_pretty }}</pre>
+          {% endif %}
+          <h3>Raw</h3>
+          <pre>{{ msg.body_utf8 }}</pre>
+        </div>
+        <div class="tab-pane" id="tab-response">
+          <dl class="kv">
+            <dt>Status</dt><dd>{{ msg.status }}</dd>
+            <dt>Duration</dt><dd>{{ msg.duration_ms }} ms</dd>
+          </dl>
+          <h3>Headers</h3>
+          <pre>{% for (k, v) in msg.response_headers %}{{ k }}: {{ v }}
+{% endfor %}</pre>
+          <h3>Body</h3>
+          <pre>{{ msg.response_body }}</pre>
+        </div>
+        <div class="tab-pane" id="tab-warnings">
+          {% if msg.warnings.is_empty() %}
+          <p class="empty">No warnings</p>
+          {% else %}
+          <ul class="warnings">
+            {% for w in msg.warnings %}
+            <li>{{ w }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+      </div>
+      {% when None %}
+      <div class="empty-state compact">
+        <p>Select a message to inspect full debug data.</p>
+      </div>
+      {% endmatch %}
+    </aside>
+  </div>
+
+  <dialog id="new-dialog">
+    <form method="dialog" id="new-form">
+      <h2>New webhook</h2>
+      <label>Kind
+        <select name="kind" id="new-kind">
+          <option value="slack">Slack</option>
+          <option value="teams-workflows">Teams Workflows</option>
+          <option value="teams-legacy">Teams Legacy</option>
+          <option value="generic">Generic</option>
+        </select>
+      </label>
+      <label>Name <input name="name" id="new-name" required placeholder="alerts"></label>
+      <menu>
+        <button type="submit" class="btn primary" value="create">Create</button>
+        <button type="submit" class="btn" value="cancel">Cancel</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="faults-dialog">
+    <form method="dialog" id="faults-form">
+      <h2>Fault injection</h2>
+      <label>Force status <input type="number" id="fault-status" min="100" max="599" placeholder="e.g. 500"></label>
+      <label>Delay ms <input type="number" id="fault-delay" min="0" value="0"></label>
+      <label>Random delay ms <input type="number" id="fault-delay-random" min="0" value="0"></label>
+      <label><input type="checkbox" id="fault-429"> Force 429 + Retry-After</label>
+      <label>Retry-After secs <input type="number" id="fault-retry-after" min="0" value="1"></label>
+      <label>Fail percent <input type="number" id="fault-fail-pct" min="0" max="100" value="0"></label>
+      <menu>
+        <button type="submit" class="btn primary" value="save">Save</button>
+        <button type="submit" class="btn" value="cancel">Cancel</button>
+      </menu>
+    </form>
+  </dialog>
+</body>
+</html>

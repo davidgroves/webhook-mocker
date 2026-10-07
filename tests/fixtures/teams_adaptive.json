@@ -1,0 +1,35 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+          {
+            "type": "TextBlock",
+            "size": "Large",
+            "weight": "Bolder",
+            "text": "Incident opened"
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              { "title": "Severity", "value": "SEV-2" },
+              { "title": "Service", "value": "billing" }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "View",
+            "url": "https://example.com/incidents/1"
+          }
+        ]
+      }
+    }
+  ]
+}

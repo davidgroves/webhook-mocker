@@ -1,0 +1,24 @@
+{
+  "@type": "MessageCard",
+  "@context": "https://schema.org/extensions",
+  "summary": "Build failed",
+  "themeColor": "FF0000",
+  "title": "CI failed on main",
+  "sections": [
+    {
+      "activityTitle": "webhook-mocker",
+      "facts": [
+        { "name": "Branch", "value": "main" },
+        { "name": "Commit", "value": "abc1234" }
+      ],
+      "text": "The pipeline **broke** on the test job."
+    }
+  ],
+  "potentialAction": [
+    {
+      "@type": "OpenUri",
+      "name": "Open run",
+      "targets": [{ "os": "default", "uri": "https://example.com/runs/1" }]
+    }
+  ]
+}
