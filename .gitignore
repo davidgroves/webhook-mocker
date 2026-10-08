@@ -24,6 +24,8 @@ core.*
 # Project
 .snapshot.json
 *.snapshot.json
+webhook-mocker.yaml
+webhook-mocker.yml
 .env
 .DS_Store
 

@@ -11,6 +11,7 @@ askama = "0.14"
 axum = { version = "0.8", features = ["macros"] }
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
+config = { version = "0.15.27", features = ["convert-case", "yaml"], default-features = false }
 futures = "0.3"
 hex = "0.4"
 parking_lot = "0.12"

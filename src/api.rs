@@ -174,6 +174,7 @@ async fn create_channel(
         body.token,
         body.slack_team,
         body.slack_bot,
+        FaultProfile::default(),
     );
     (StatusCode::CREATED, Json(channel_out(&state, ch)))
 }

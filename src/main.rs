@@ -4,45 +4,60 @@ use clap::Parser;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use webhook_mocker::{
     AppState, build_router,
-    config::{Cli, Command},
+    config::{Cli, Command, Settings},
     store::Store,
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    let settings = Settings::load(&cli)?;
 
-    init_tracing(cli.json_logs);
+    init_tracing(settings.json_logs);
 
     if matches!(cli.command, Some(Command::Healthcheck)) {
-        return run_healthcheck(cli.listen).await;
+        return run_healthcheck(settings.listen).await;
     }
 
-    cli.warn_if_browser_blocked();
+    settings.warn_if_browser_blocked();
 
-    let store = Store::new(cli.max_messages, cli.snapshot.clone());
-    for preset in &cli.channels {
-        let ch = store.create_channel(preset.kind, preset.name.clone(), None, None, None);
+    let store = Store::new(settings.max_messages, settings.snapshot.clone());
+    for preset in &settings.channels {
+        let ch = store.create_channel(
+            preset.kind,
+            preset.name.clone(),
+            preset.token.clone(),
+            preset.slack_team.clone(),
+            preset.slack_bot.clone(),
+            preset.faults.clone(),
+        );
         tracing::info!(
             kind = ch.kind.as_str(),
             name = %ch.name,
-            url = %ch.webhook_url(&cli.public_base()),
+            url = %ch.webhook_url(&settings.public_base()),
+            force_429 = ch.faults.force_429,
+            fail_percent = ?ch.faults.fail_percent,
+            delay_ms = ?ch.faults.delay_ms,
             "preset channel ready"
         );
     }
 
     let state = AppState {
         store,
-        public_base: cli.public_base(),
-        strict: cli.strict,
-        auto_create: cli.auto_create,
+        public_base: settings.public_base(),
+        strict: settings.strict,
+        auto_create: settings.auto_create,
     };
 
-    let app = build_router(state, cli.max_body);
+    let app = build_router(state, settings.max_body);
 
-    let listener = tokio::net::TcpListener::bind(cli.listen).await?;
-    tracing::info!(listen = %cli.listen, public = %cli.public_base(), "webhook-mocker listening");
-    tracing::info!("UI: {}/", cli.public_base());
+    let listener = tokio::net::TcpListener::bind(settings.listen).await?;
+    tracing::info!(
+        listen = %settings.listen,
+        public = %settings.public_base(),
+        "webhook-mocker listening"
+    );
+    tracing::info!("UI: {}/", settings.public_base());
 
     axum::serve(
         listener,

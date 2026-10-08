@@ -1,0 +1,41 @@
+# Example config for webhook-mocker.
+# Copy to ./webhook-mocker.yaml or pass with --config / -c / WM_CONFIG.
+#
+# Precedence: CLI flags > WM_* environment variables > this file > defaults
+
+listen: 127.0.0.1:5080
+# public_url: http://127.0.0.1:5080
+
+channels:
+  - kind: slack
+    name: alerts
+
+  - kind: teams
+    name: ops
+
+  # Stable webhook path + fault profile applied at startup
+  - kind: slack
+    name: flaky
+    token: flaky-token
+    slack_team: T0
+    slack_bot: B0
+    faults:
+      force_429: true
+      retry_after_secs: 2
+    # → POST /slack/services/T0/B0/flaky-token always returns 429
+
+  - kind: generic
+    name: slow
+    token: slow-hook
+    faults:
+      delay_ms: 1500
+      fail_percent: 25
+      status: 503
+    # → POST /hooks/slow-hook is slow; ~25% of hits return 503
+
+strict: false
+auto_create: true
+max_messages: 500
+max_body: 1048576
+# snapshot: ./webhook-mocker.snapshot.json
+json_logs: true

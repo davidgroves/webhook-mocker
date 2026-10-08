@@ -251,6 +251,7 @@ impl Store {
         token: Option<String>,
         slack_team: Option<String>,
         slack_bot: Option<String>,
+        faults: FaultProfile,
     ) -> Channel {
         let token = token.unwrap_or_else(|| Uuid::new_v4().simple().to_string());
         let team = if kind == ChannelKind::Slack {
@@ -272,7 +273,7 @@ impl Store {
             slack_bot: bot.clone(),
             created_at: OffsetDateTime::now_utc(),
             archived: false,
-            faults: FaultProfile::default(),
+            faults,
             unread: 0,
         };
         let key = Self::path_key(kind, &token, team.as_deref(), bot.as_deref());
@@ -312,6 +313,7 @@ impl Store {
             Some(token.to_string()),
             team.map(str::to_string),
             bot.map(str::to_string),
+            FaultProfile::default(),
         ))
     }
 
