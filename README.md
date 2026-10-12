@@ -149,17 +149,192 @@ curl -N localhost:5080/api/events
 
 ## Example payloads
 
+Channels are auto-created on first hit. After posting, open the UI at http://127.0.0.1:5080/ and select the virtual channel. Full fixtures also live under [`tests/fixtures/`](tests/fixtures/).
+
+### Slack
+
+Plain text (mrkdwn works in the rendered preview):
+
 ```bash
-# Slack
 curl -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
   -H 'content-type: application/json' \
-  -d '{"text":"Hello from Slack"}'
+  -d '{"text":"Deploy ok: *api* → prod"}'
+# → 200 body: ok
+```
 
-# Teams Workflows (minimal Adaptive Card)
+Block Kit (header + section + context). Same shape as [`tests/fixtures/slack_blocks.json`](tests/fixtures/slack_blocks.json):
+
+```bash
+curl -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
+  -H 'content-type: application/json' \
+  -d '{
+    "text": "Fallback text for notifications",
+    "blocks": [
+      {"type":"header","text":{"type":"plain_text","text":"Deploy complete"}},
+      {"type":"section","text":{"type":"mrkdwn","text":"Service *api* rolled out to *prod*."}},
+      {"type":"divider"},
+      {"type":"context","elements":[{"type":"mrkdwn","text":"by deploy-bot"}]}
+    ]
+  }'
+```
+
+Or post the fixture file:
+
+```bash
+curl -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
+  -H 'content-type: application/json' \
+  --data-binary @tests/fixtures/slack_blocks.json
+```
+
+![Slack Block Kit message rendered in the UI](docs/images/slack-block-kit.png)
+
+### Microsoft Teams
+
+**Workflows** (Adaptive Card envelope) — success is `202` with an empty body:
+
+```bash
+curl -i -X POST http://127.0.0.1:5080/teams/workflows/dev \
+  -H 'content-type: application/json' \
+  --data-binary @tests/fixtures/teams_adaptive.json
+# → 202 Accepted
+```
+
+![Teams Workflows Adaptive Card rendered in the UI](docs/images/teams-adaptive.png)
+
+Minimal Adaptive Card inline:
+
+```bash
 curl -X POST http://127.0.0.1:5080/teams/workflows/dev \
   -H 'content-type: application/json' \
   -d '{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","version":"1.4","body":[{"type":"TextBlock","text":"Hello from Teams"}]}}]}'
 ```
 
-Then open the UI and click the virtual channel.
+**Legacy Office 365 connector** (MessageCard) — success is `200` with body `1`:
+
+```bash
+curl -i -X POST http://127.0.0.1:5080/teams/webhookb2/dev \
+  -H 'content-type: application/json' \
+  --data-binary @tests/fixtures/teams_messagecard.json
+# → 200 body: 1
+```
+
+![Teams legacy MessageCard rendered in the UI](docs/images/teams-messagecard.png)
+
+## Errors and fault injection
+
+Provider-shaped errors and injected faults are still **captured** in the channel (you can inspect them in the UI/API).
+
+![Slack 400 and 429 captures with Response tab showing rate_limited](docs/images/slack-errors.png)
+
+### Slack hard errors
+
+| Situation | HTTP | Body |
+|---|---|---|
+| Invalid JSON / unreadable form | `400` | `invalid_payload` |
+| Empty payload (no `text`, `blocks`, or `attachments`) | `400` | `no_text` |
+| Channel archived | `410` | `channel_is_archived` |
+| Unknown path when `--auto-create=false` | `404` | `no_service` |
+
+```bash
+# Missing content → no_text
+curl -i -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
+  -H 'content-type: application/json' \
+  -d '{}'
+# → 400 no_text
+
+# Invalid JSON → invalid_payload
+curl -i -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
+  -H 'content-type: application/json' \
+  -d 'not-json'
+# → 400 invalid_payload
+```
+
+Teams workflows/legacy usually still return success (`202` / `200`) for soft problems (e.g. unknown card shape); warnings are attached to the capture instead.
+
+### Validation warnings and `--strict`
+
+By default, soft validation issues become **warnings** on the capture (UI shows them; response still succeeds). Examples:
+
+- Slack: missing `text` fallback alongside `blocks`
+- Teams Workflows: no adaptive card attachments found; unsupported Adaptive Card element
+- Teams legacy: payload did not match MessageCard or Adaptive Card
+
+![Slack validation warning: missing text fallback alongside blocks](docs/images/slack-warnings.png)
+
+With `--strict` / `WM_STRICT=true`, those warnings become a hard `400` and the response body is the joined warning text:
+
+```bash
+./webhook-mocker --strict
+
+# Blocks without a top-level text fallback → 400 in strict mode
+curl -i -X POST http://127.0.0.1:5080/slack/services/T0/B0/dev \
+  -H 'content-type: application/json' \
+  -d '{"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"no fallback"}}]}'
+```
+
+### Fault injection (retry / delay / failure)
+
+Simulate rate limits and flaky endpoints via the UI **Faults** dialog, config `faults:`, or the API:
+
+```bash
+CH=$(curl -s -X POST localhost:5080/api/channels \
+  -H 'content-type: application/json' \
+  -d '{"kind":"slack","name":"flaky"}')
+ID=$(echo "$CH" | jq -r .id)
+URL=$(echo "$CH" | jq -r .webhook_url)
+
+curl -s -X POST "localhost:5080/api/channels/$ID/faults" \
+  -H 'content-type: application/json' \
+  -d '{"force_429":true,"retry_after_secs":2}'
+
+curl -i -X POST "$URL" \
+  -H 'content-type: application/json' \
+  -d '{"text":"should rate limit"}'
+# → 429 body: rate_limited, Retry-After: 2
+```
+
+Other useful fault fields: `delay_ms`, `delay_random_ms`, `status`, `fail_percent` (failed requests return body `fault_injected`).
+
+## Debugging captures
+
+Every delivery is stored with headers, raw body, parsed JSON, validation warnings, rendered message, and the exact HTTP response (status, headers, body, duration).
+
+### UI
+
+1. Open http://127.0.0.1:5080/ and select the channel.
+2. Click a message in the feed — status badge and summary appear in the list.
+3. Use the debug panel tabs:
+   - **Request** — method, path, headers, and a ready-to-copy `curl`
+   - **Body** — UTF-8 / JSON view of the payload
+   - **Response** — status, headers, body that were sent back to the client
+4. Warnings (if any) show on the message; live updates arrive over SSE.
+
+![Request tab: headers and copy-as-curl for a Slack Block Kit delivery](docs/images/slack-debug-request.png)
+
+![Response tab: status 200, headers, and body ok](docs/images/slack-debug-response.png)
+
+### API
+
+```bash
+# After posting a webhook, list captures (includes warnings + response)
+curl -s "localhost:5080/api/channels/$ID/messages" | jq
+
+# Single capture
+MID=$(curl -s "localhost:5080/api/channels/$ID/messages" | jq -r '.messages[0].id')
+curl -s "localhost:5080/api/channels/$ID/messages/$MID" | jq '{
+  warnings,
+  response,
+  body_json,
+  path,
+  headers
+}'
+
+# Block until N messages arrive (handy in tests)
+curl -s "localhost:5080/api/channels/$ID/wait?count=1&timeout=5s" | jq
+
+# Live event stream
+curl -N localhost:5080/api/events
+```
+
+Process logs: `RUST_LOG=webhook_mocker=debug,tower_http=info ./webhook-mocker` (or `--json-logs` / `WM_JSON_LOGS=true`).
 
