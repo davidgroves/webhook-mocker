@@ -26,7 +26,7 @@ time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
+tower-http = { version = "0.7", features = ["cors", "limit", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "6", features = ["axum_extras", "uuid", "time"] }
