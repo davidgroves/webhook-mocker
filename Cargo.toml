@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/davidgroves/webhook-mocker"
 
 [dependencies]
-askama = "0.14"
+askama = "0.16"
 axum = { version = "0.8", features = ["macros"] }
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
